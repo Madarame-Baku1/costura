@@ -1,0 +1,64 @@
+name: Doctor live PID smoke check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the exact diagnostic-fix commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 3cb793411d6f454f68cbdf0ad9d5145d180a61d4
+          persist-credentials: false
+      - name: Verify a real localhost HTTP server is identified by PID
+        run: |
+          command -v lsof
+          python3 - <<'PY'
+          import socket
+          import subprocess
+          import sys
+          import time
+
+          server = subprocess.Popen(
+              [sys.executable, "-m", "http.server", "8000", "--bind", "127.0.0.1"],
+              stdin=subprocess.DEVNULL,
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL,
+          )
+          try:
+              for _ in range(50):
+                  if server.poll() is not None:
+                      raise RuntimeError("The test server exited before listening")
+                  try:
+                      with socket.create_connection(("127.0.0.1", 8000), timeout=0.1):
+                          break
+                  except OSError:
+                      time.sleep(0.1)
+              else:
+                  raise RuntimeError("The test server did not listen")
+              result = subprocess.run(
+                  ["bash", "scripts/doctor.sh"],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+                  timeout=30,
+              )
+              lines = [
+                  line for line in result.stdout.splitlines()
+                  if "port 8000 is already in use" in line
+              ]
+              assert len(lines) == 1, (lines, result.stderr)
+              assert f"(pid {server.pid})" in lines[0], lines
+              assert f"stop it with: kill {server.pid}" in lines[0], lines
+              print(lines[0])
+              print("PASS: the diagnostic identified the actual HTTP server PID")
+          finally:
+              server.terminate()
+              server.wait(timeout=5)
+          PY
