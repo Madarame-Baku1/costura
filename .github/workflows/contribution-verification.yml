@@ -1,0 +1,54 @@
+name: Contribution verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Contribution ${{ matrix.issue }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - issue: 13
+            ref: 8d82b66ab309a4c80c5945b4025309842f8ae580
+          - issue: 14
+            ref: 3cb793411d6f454f68cbdf0ad9d5145d180a61d4
+          - issue: 16
+            ref: da2dceb3fd0d1ccd77bd19075f6ac50bd0c5d3f0
+    env:
+      COSTURA_ENV: test
+      COSTURA_WEB_ORIGIN: http://127.0.0.1:3000
+      DATABASE_URL: postgresql+psycopg://costura:costura@localhost:5432/costura
+      POSTGRES_DB: costura
+      POSTGRES_PASSWORD: costura
+      POSTGRES_USER: costura
+      TEST_DATABASE_URL: postgresql+psycopg://costura:costura@localhost:5432/costura_test
+    steps:
+      - name: Check out the exact contribution commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.ref }}
+          persist-credentials: false
+      - name: Set up the project-pinned tools
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        with:
+          install: true
+          cache: false
+      - name: Install frozen application dependencies
+        run: |
+          just api::setup
+          just web::setup
+      - name: Run required application quality checks
+        run: just check
+      - name: Run the API unit tests
+        run: just api::test-unit
+      - name: Check the generated documentation index
+        run: just docs::check-llms
+      - name: Run full API and web tests with coverage floors
+        run: just coverage-core
