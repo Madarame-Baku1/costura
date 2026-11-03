@@ -2,7 +2,13 @@
 # by overriding the command (see docker-compose.prod.yml).
 # The image healthcheck calls /live and only fits the default API command.
 
-FROM python:3.14.8-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS build
+FROM python:3.14.8-slim-bookworm@sha256:44e000a07b48bef1517a2b14adc93c17af728ca98858b5e24c6e1b18de1b2ef2 AS base
+
+RUN apt-get update \
+    && apt-get install -y --only-upgrade --no-install-recommends libssl3 openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS build
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.0@sha256:cdc6093146eb3ff6a40107b38f008b789e050e77ad87865e381d9917da55a168 /uv /uvx /usr/local/bin/
 WORKDIR /app
@@ -18,12 +24,12 @@ COPY apps/api/alembic.ini ./
 COPY apps/api/alembic ./alembic
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.14.8-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS runtime
+FROM base AS runtime
 
 ARG COSTURA_UID=1001
 ARG COSTURA_GID=1001
 
-# The digest-pinned base already ships ca-certificates; nothing is installed from apt.
+# The shared base already ships ca-certificates and the OpenSSL security updates.
 RUN groupadd --gid "${COSTURA_GID}" costura \
     && useradd --uid "${COSTURA_UID}" --gid "${COSTURA_GID}" --home-dir /app --shell /usr/sbin/nologin costura \
     && rm -rf /usr/local/lib/python3.14/site-packages/pip /usr/local/lib/python3.14/site-packages/pip-*.dist-info \

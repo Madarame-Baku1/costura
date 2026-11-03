@@ -1,19 +1,21 @@
 # Caddy rebuilt with the builder's Go toolchain and a current golang.org/x/net, so the binary
 # does not wait on an upstream image rebuild for Go security fixes. Runs as a non-root user.
 # The healthcheck uses BusyBox wget from the base image.
-FROM --platform=$BUILDPLATFORM caddy:2.11.7-builder-alpine@sha256:d6161a2c82fd58b3205048958fb6246d0c5d892beee8a47e90944610c4efd100 AS build
+FROM --platform=$BUILDPLATFORM caddy:2.11.7-builder-alpine@sha256:95a5e7e2692b5eb9545aadc5b90a39f6f509bee59c9508a493f83ee902eaef63 AS build
 ARG TARGETOS
 ARG TARGETARCH
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 xcaddy build v2.11.7 --replace golang.org/x/net=golang.org/x/net@v0.61.0 --output /usr/bin/caddy \
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 xcaddy build v2.11.7 --replace golang.org/x/net=golang.org/x/net@v0.61.0 \
+    --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 --output /usr/bin/caddy \
     && cd /go/pkg/mod \
     && find . -type f \( -iname 'LICENSE*' -o -iname 'NOTICE*' -o -iname 'COPYING*' \) \
         -not -path './cache/*' -exec install -D -m 0644 {} /licenses/{} \;
 
-FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
 USER root
 COPY --from=build /usr/bin/caddy /usr/bin/caddy
 COPY --from=build /licenses /usr/share/licenses/caddy
-RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \
+RUN apk upgrade --no-cache brotli-libs curl libcurl \
+    && setcap cap_net_bind_service=+ep /usr/bin/caddy \
     && addgroup -g 1001 caddy \
     && adduser -D -H -u 1001 -G caddy -s /sbin/nologin caddy \
     && chown -R caddy:caddy /data /config /etc/caddy
