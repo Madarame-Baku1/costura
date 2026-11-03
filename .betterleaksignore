@@ -29,3 +29,6 @@ apps/api/costura/ops/db_roles.py:generic-password:22
 # Disposable role password used only by the db_roles integration test against a throwaway
 # PostgreSQL container.
 apps/api/tests/test_db_roles.py:generic-password:16
+
+# Historical placeholder for a disposable PostgreSQL verification container.
+1b1a082fb2a249ef712f4bd42a9ba3b0dd6a7088:.github/workflows/contribution-verification.yml:generic-password:29
